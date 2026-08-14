@@ -124,11 +124,37 @@ document.addEventListener('DOMContentLoaded', () => {
                 const resultado = idxProfit !== -1 ? parseFloat(fila[idxProfit]) || 0 : 0;
                 const simbolo = idxSymbol !== -1 ? (fila[idxSymbol] || 'N/A').toString() : 'N/A';
                 
+                // --- AJUSTE DE ZONA HORARIA (MT5 a Hora Local) ---
                 let fechaCruda = idxTime !== -1 ? (fila[idxTime] || '').toString() : '';
-                let fechaLimpia = fechaCruda.split(' ')[0].replace(/\./g, '-');
+                let fechaLimpia = '';
+
+                // MT5 exporta como "YYYY.MM.DD HH:MM:SS"
+                if (fechaCruda.includes(' ')) {
+                    let partes = fechaCruda.split(' ');
+                    let fechaStr = partes[0].replace(/\./g, '/'); // Usar slash evita bugs de interpretación
+                    let horaStr = partes[1];
+                    
+                    let fechaObj = new Date(`${fechaStr} ${horaStr}`);
+                    
+                    if (!isNaN(fechaObj.getTime())) {
+                        // Restar 7 horas para emparejar el GMT+3 de MT5 con el GMT-4 local
+                        fechaObj.setHours(fechaObj.getHours() - 7);
+                        
+                        let yyyy = fechaObj.getFullYear();
+                        let mm = String(fechaObj.getMonth() + 1).padStart(2, '0');
+                        let dd = String(fechaObj.getDate()).padStart(2, '0');
+                        fechaLimpia = `${yyyy}-${mm}-${dd}`;
+                    } else {
+                        fechaLimpia = partes[0].replace(/\//g, '-');
+                    }
+                } else {
+                    fechaLimpia = fechaCruda.replace(/\./g, '-');
+                }
+
                 if (!fechaLimpia || fechaLimpia.length < 8) {
                     fechaLimpia = new Date().toISOString().split('T')[0];
                 }
+                // --------------------------------------------------
 
                 const ticketFallback = `${fechaLimpia}_${simbolo}_${precioEntrada}_${resultado}`;
                 const ticket = idxTicket !== -1 && fila[idxTicket] ? fila[idxTicket].toString().trim() : ticketFallback;
