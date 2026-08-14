@@ -93,7 +93,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!col) return;
                 const c = col.toString().toLowerCase().trim();
                 
-                if ((c.includes('ticket') || c.includes('order') || c.includes('deal') || c.includes('transacción')) && idxTicket === -1) {
+                if ((c.includes('ticket') || c.includes('order') || c.includes('deal') || c.includes('transacción') || c.includes('posici') || c.includes('position')) && idxTicket === -1) {
                     idxTicket = idx;
                 } else if ((c.includes('time') || c.includes('tiempo') || c.includes('fecha')) && idxTime === -1) {
                     idxTime = idx;
@@ -123,13 +123,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 const precioSalida = idxPriceOut !== -1 ? parseFloat(fila[idxPriceOut]) || 0 : precioEntrada;
                 const resultado = idxProfit !== -1 ? parseFloat(fila[idxProfit]) || 0 : 0;
                 const simbolo = idxSymbol !== -1 ? (fila[idxSymbol] || 'N/A').toString() : 'N/A';
-                const ticket = idxTicket !== -1 ? fila[idxTicket] : Date.now() + Math.random();
                 
                 let fechaCruda = idxTime !== -1 ? (fila[idxTime] || '').toString() : '';
                 let fechaLimpia = fechaCruda.split(' ')[0].replace(/\./g, '-');
                 if (!fechaLimpia || fechaLimpia.length < 8) {
                     fechaLimpia = new Date().toISOString().split('T')[0];
                 }
+
+                const ticketFallback = `${fechaLimpia}_${simbolo}_${precioEntrada}_${resultado}`;
+                const ticket = idxTicket !== -1 && fila[idxTicket] ? fila[idxTicket].toString().trim() : ticketFallback;
 
                 if (!isNaN(resultado) && resultado !== 0 && !isNaN(lotes) && lotes > 0 && precioEntrada > 0 && (tipo === 'buy' || tipo === 'sell')) {
                     nuevosTradesLeidos.push({
@@ -145,8 +147,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
+            // MEJORA DEFINITIVA: Filtrar por ID o por Propiedades Exactas
             const tradesNuevosFiltrados = nuevosTradesLeidos.filter(tradeNuevo => {
-                return !misTrades.some(tradeGuardado => tradeGuardado.id == tradeNuevo.id);
+                return !misTrades.some(tradeGuardado => {
+                    // 1. ¿Tienen el mismo ID?
+                    const coincidenciaID = String(tradeGuardado.id) === String(tradeNuevo.id);
+                    
+                    // 2. ¿Tienen exactamente los mismos datos? (Ignora los IDs aleatorios viejos)
+                    const coincidenciaDatos = 
+                        tradeGuardado.fecha === tradeNuevo.fecha &&
+                        tradeGuardado.simbolo === tradeNuevo.simbolo &&
+                        tradeGuardado.resultado === tradeNuevo.resultado &&
+                        tradeGuardado.precioEntrada === tradeNuevo.precioEntrada &&
+                        tradeGuardado.tipo === tradeNuevo.tipo;
+
+                    return coincidenciaID || coincidenciaDatos;
+                });
             });
 
             if (tradesNuevosFiltrados.length === 0) {
@@ -291,7 +307,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 
-    // --- 6. LÓGICA DEL PLAYBOOK (CREAR Y ELIMINAR SETUPS) ---
+    // --- 6. LÓGICA DEL PLAYBOOK ---
     const btnAbrirModal = document.getElementById('btn-abrir-modal');
     const btnCancelarSetup = document.getElementById('btn-cancelar-setup');
     const formContainer = document.getElementById('form-setup-container');
