@@ -3,181 +3,129 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vextor | Diario de Trading</title>
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
+    <title>Vextor | Trading Dashboard</title>
     <link rel="stylesheet" href="style.css">
-    
-    <!-- Firebase y XLSX -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 
-    <!-- SIDEBAR -->
-    <aside class="sidebar">
-        <div class="sidebar-brand">
-            <h2>Vextor<span>.</span></h2>
-            <p>Trading Journal Pro</p>
+    <!-- BARRA DE NAVEGACIÓN -->
+    <header class="top-nav">
+        <div class="nav-container">
+            <h1>VEXTOR <span>QUANT</span></h1>
+            <nav class="nav-tabs">
+                <button class="tab-btn active" onclick="switchTab('dashboard')">
+                    <i class="fa-solid fa-chart-line"></i> Dashboard
+                </button>
+                <button class="tab-btn" onclick="switchTab('calendario')">
+                    <i class="fa-solid fa-calendar-days"></i> Calendario
+                </button>
+            </nav>
         </div>
-        <nav class="nav-menu">
-            <a href="#" class="nav-link active" data-view="dashboard"><i class="fa-solid fa-chart-line"></i> Dashboard</a>
-            <a href="#" class="nav-link" data-view="calendario"><i class="fa-solid fa-calendar-days"></i> Calendario</a>
-            <a href="#" class="nav-link" data-view="playbook"><i class="fa-solid fa-book-bookmark"></i> Playbook</a>
-            <a href="#" class="nav-link" data-view="copy-trading"><i class="fa-solid fa-network-wired"></i> Replicar Cuentas</a>
-        </nav>
-    </aside>
+    </header>
 
-    <!-- MAIN CONTENT -->
-    <main class="main">
-        <header class="header-top">
-            <h1 id="titulo-vista">Rendimiento General</h1>
-            <div class="status-indicator">
-                <i class="fa-solid fa-circle"></i> Firebase Conectado
-            </div>
-        </header>
-
+    <main class="dashboard-container">
+        
         <!-- VISTA 1: DASHBOARD -->
-        <section class="view-section active" id="view-dashboard">
-            <div class="kpi-grid">
+        <div id="view-dashboard" class="tab-content active">
+            <section class="dashboard-kpis">
                 <div class="kpi-card">
-                    <span>Profit Neto</span>
-                    <h3 id="kpi-profit">$0.00</h3>
+                    <h3>Beneficio Total</h3>
+                    <p id="kpi-profit" class="kpi-value">$0.00</p>
                 </div>
                 <div class="kpi-card">
-                    <span>Win Rate</span>
-                    <h3 id="kpi-winrate">0.0%</h3>
+                    <h3>Win Rate</h3>
+                    <p id="kpi-winrate" class="kpi-value">0%</p>
                 </div>
                 <div class="kpi-card">
-                    <span>Total Trades</span>
-                    <h3 id="kpi-trades">0</h3>
+                    <h3>Total Trades</h3>
+                    <p id="kpi-trades" class="kpi-value">0</p>
                 </div>
-                <div class="kpi-card">
-                    <span>Profit Factor</span>
-                    <h3 id="kpi-pf">0.00</h3>
-                </div>
-            </div>
+            </section>
 
-            <div class="upload-section">
-                <i class="fa-solid fa-cloud-arrow-up upload-icon"></i>
-                <h3>Importar Historial de MetaTrader 5</h3>
-                <p>Sube tu reporte exportado (Excel o CSV) para actualizar tus estadísticas automáticamente.</p>
-                <label class="btn-upload">
-                    <i class="fa-solid fa-file-excel"></i> Seleccionar Archivo MT5
-                    <input type="file" id="input-archivo-mt5" accept=".xlsx, .xls, .csv">
-                </label>
-            </div>
-
-            <div class="table-container">
-                <h3>Últimas Operaciones Registradas</h3>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Símbolo</th>
-                            <th>Tipo</th>
-                            <th>Lotes</th>
-                            <th>Entrada</th>
-                            <th>Salida</th>
-                            <th>Resultado ($)</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tabla-trades">
-                        <tr>
-                            <td colspan="6" class="empty-row">No hay operaciones registradas aún.</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </section>
+            <section class="view-section" id="view-grafica">
+                <h2>Rendimiento Histórico</h2>
+                <div class="chart-container">
+                    <canvas id="equityChart"></canvas>
+                </div>
+            </section>
+        </div>
 
         <!-- VISTA 2: CALENDARIO -->
-        <section class="view-section" id="view-calendario">
-            <div class="calendar-header">
-                <button id="btn-prev-month"><i class="fa-solid fa-chevron-left"></i></button>
-                <h2 id="mes-actual">Agosto 2026</h2>
-                <button id="btn-next-month"><i class="fa-solid fa-chevron-right"></i></button>
-            </div>
-            
-            <div class="calendar-grid">
-                <div class="day-name">Lun</div><div class="day-name">Mar</div>
-                <div class="day-name">Mié</div><div class="day-name">Jue</div>
-                <div class="day-name">Vie</div><div class="day-name">Sáb</div><div class="day-name">Dom</div>
-                
-                <div id="calendar-days-container" class="days-container"></div>
-            </div>
-        </section>
-
-        <!-- VISTA 3: PLAYBOOK (CORREGIDA SIN DUPLICADOS) -->
-        <section class="view-section" id="view-playbook">
-            <div class="playbook-header">
-                <h2>Mis Setups / Configuraciones</h2>
-                <button class="btn-upload" id="btn-abrir-modal" style="background: #10B981; color: #0F172A;"><i class="fa-solid fa-plus"></i> Nuevo Setup</button>
-            </div>
-
-            <!-- Formulario desplegable para crear setup -->
-            <div id="form-setup-container" class="setup-form-container" style="display: none;">
-                <h3>Registrar Nueva Configuración</h3>
-                <form id="form-nuevo-setup">
-                    <div class="form-group">
-                        <label>Nombre del Setup</label>
-                        <input type="text" id="setup-titulo" placeholder="Ej. Order Block en H4 + FVG" required>
+        <div id="view-calendario" class="tab-content">
+            <section class="view-section">
+                <div class="calendar-header">
+                    <button id="btn-prev-month"><i class="fa-solid fa-chevron-left"></i></button>
+                    <div class="mes-info">
+                        <h2 id="mes-actual">Cargando...</h2>
+                        <span id="mes-total-profit" class="mes-total">$0.00</span>
                     </div>
-                    <div class="form-group">
-                        <label>Categoría / Tag</label>
-                        <input type="text" id="setup-tag" placeholder="Ej. SMC, Liquidity, Trend" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Descripción / Reglas de Entrada</label>
-                        <textarea id="setup-desc" placeholder="Describe las confirmaciones necesarias..." required></textarea>
-                    </div>
-                    <div class="form-actions">
-                        <button type="submit" class="btn-upload" style="background: #38BDF8; color: #0F172A;">Guardar en la Nube</button>
-                        <button type="button" id="btn-cancelar-setup" class="btn-upload" style="background: #EF4444; color: #F8FAFC;">Cancelar</button>
-                    </div>
-                </form>
-            </div>
-
-            <!-- Contenedor dinámico de tarjetas -->
-            <div class="playbook-grid" id="playbook-container">
-                <!-- Se cargan automáticamente desde Firebase -->
-            </div>
-        </section>
-
-        <!-- VISTA 4: COPY TRADING -->
-        <section class="view-section" id="view-copy-trading">
-            <div class="copy-container">
-                <div class="copy-header">
-                    <h2>Gestión de Copy Trading</h2>
-                    <p>Conecta tus cuentas esclavas para replicar de forma automática las operaciones de tu cuenta Master.</p>
+                    <button id="btn-next-month"><i class="fa-solid fa-chevron-right"></i></button>
                 </div>
                 
-                <div class="copy-card-grid">
-                    <div class="kpi-card" style="border-left: 4px solid #38BDF8;">
-                        <span>Cuenta Master (Origen)</span>
-                        <h3>MT5 - #849201</h3>
-                        <p style="color: #10B981; font-size: 0.85rem; margin-top: 5px;"><i class="fa-solid fa-circle-check"></i> Activa y Escuchando</p>
-                    </div>
-                    <div class="kpi-card" style="border-left: 4px solid #F59E0B;">
-                        <span>Cuentas Esclavas Conectadas</span>
-                        <h3>0 Cuentas</h3>
-                        <p style="color: #94A3B8; font-size: 0.85rem; margin-top: 5px;">Listo para vincular vía script Python</p>
+                <div class="calendar-wrapper">
+                    <div class="calendar-grid">
+                        <div class="day-name">Lun</div>
+                        <div class="day-name">Mar</div>
+                        <div class="day-name">Mié</div>
+                        <div class="day-name">Jue</div>
+                        <div class="day-name">Vie</div>
+                        <div class="day-name">Sáb</div>
+                        <div class="day-name">Dom</div>
+                        <div class="day-name highlight-col">Total Sem</div>
+                        
+                        <div id="calendar-days-container" class="days-container" style="display: contents;"></div>
                     </div>
                 </div>
+            </section>
+        </div>
 
-                <div class="upload-section" style="margin-top: 25px;">
-                    <i class="fa-solid fa-link upload-icon" style="color: #F59E0B;"></i>
-                    <h3>Vincular Nueva Cuenta Esclava</h3>
-                    <p>Agrega las credenciales de tu broker secundario para configurar el multiplicador de lotaje.</p>
-                    <button class="btn-upload" style="background: #F59E0B; color: #0F172A;" onclick="alert('Módulo preparado para conectar con la API de Python.')">
-                        <i class="fa-solid fa-plus"></i> Agregar Cuenta Esclava
-                    </button>
-                </div>
-            </div>
-        </section>
     </main>
 
+    <!-- CONEXIÓN A FIREBASE Y CARGA DE DATOS -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        // PEGA AQUÍ TUS CREDENCIALES DE FIREBASE
+        const firebaseConfig = {
+  apiKey: "AIzaSyBhY_LqT0DXU9mI27VNrIZZVboOlNFQzSs",
+  authDomain: "vextor-d627c.firebaseapp.com",
+  projectId: "vextor-d627c",
+  storageBucket: "vextor-d627c.firebasestorage.app",
+  messagingSenderId: "158596639790",
+  appId: "1:158596639790:web:88f98a25dba712a61783bf"
+};
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        window.cargarTradesDesdeFirebase = async function() {
+            try {
+                const docRef = doc(db, "vextor_data", "diario_personal");
+                const docSnap = await getDoc(docRef);
+                
+                if (docSnap.exists() && docSnap.data().trades) {
+                    const tradesRemotos = docSnap.data().trades;
+                    console.log("Trades cargados de Firebase:", tradesRemotos);
+                    actualizarKPIs(tradesRemotos);
+                    renderizarGrafica(tradesRemotos);
+                    renderizarCalendario(tradesRemotos);
+                } else {
+                    console.log("No hay trades registrados todavía.");
+                    actualizarKPIs([]);
+                    renderizarGrafica([]);
+                    renderizarCalendario([]);
+                }
+            } catch (error) {
+                console.error("Error al obtener datos de Firebase:", error);
+            }
+        };
+
+        // Ejecutar al cargar la página
+        window.cargarTradesDesdeFirebase();
+    </script>
     <script src="diario.js"></script>
 </body>
 </html>
