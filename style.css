@@ -127,7 +127,7 @@ label{display:block;font-size:.82rem;color:var(--mu)}
 .mh h2{margin:0;color:var(--tx);font:800 1.25rem var(--num)}
 .x{border:0;background:none;font-size:1.4rem;color:var(--mu)}
 h4{font-size:.85rem;font-weight:500;color:var(--mu)}
-.ia-out{padding:12px 16px;border-radius:20px;font-size:.9rem;line-height:1.5;border:1px dashed var(--accent);background:color-mix(in oklab,var(--accent) 10%,transparent)}
+.ia-out{padding:12px 16px;border-radius:20px;font-size:.9rem;line-height:1.5;border:1px dashed var(--accent);background:color-mix(in oklab,var(--accent) 10%,transparent);white-space:pre-wrap}
 .seg{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
 .seg button{padding:9px;border:1px solid var(--ln);border-radius:99px;background:transparent}
 .seg button.on{background:var(--accent);color:#fff;border-color:transparent}

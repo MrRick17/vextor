@@ -1,12 +1,21 @@
-import {initializeApp} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import {getFirestore,collection,getDocs,getDoc,addDoc,setDoc,doc,deleteDoc} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import {initializeApp} from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
+import {getFirestore,collection,getDocs,getDoc,addDoc,setDoc,doc,deleteDoc} from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
 
 const FB={apiKey:"AIzaSyBhY_LqT0DXU9mI27VNrIZZVboOlNFQzSs",authDomain:"vextor-d627c.firebaseapp.com",projectId:"vextor-d627c",storageBucket:"vextor-d627c.firebasestorage.app",messagingSenderId:"158596639790",appId:"1:158596639790:web:88f98a25dba712a61783bf"};
-const COL='vextor_trades', OLD=['vextor_data','diario_personal'], BE=2, IA_ENDPOINT='', MIN_SPLASH=2000; // IA_ENDPOINT: URL de tu Cloud Function
+const COL='vextor_trades', OLD=['vextor_data','diario_personal'], BE=2, MIN_SPLASH=2000;
 const C={win:'#34d399',loss:'#f87171'};
 const F=['fecha','resultado','activo','tf','dir','setup','ses','plan','emo','notas'];
 const WALLS=[null,'linear-gradient(135deg,#020617,#0f172a)','linear-gradient(135deg,#2e1065,#172554)','linear-gradient(135deg,#022c22,#064e3b)'];
-let db; try{db=getFirestore(initializeApp(FB))}catch(e){}
+
+// ⚠️ PON AQUÍ TU API KEY DE GOOGLE AI STUDIO (https://aistudio.google.com/)
+const GEMINI_API_KEY = "AQ.Ab8RN6Ixv1qs-eahtLbH3wyfcv4qaPAFFDPhVv1Rwvt-KAB6oQ"; 
+const SYSTEM=`Eres un mentor de trading experto en SMC/ICT (liquidez BSL/SSL, order blocks, FVG, inducement, MSS). Analiza el trade que te envíen en JSON. Responde en español, en texto plano sin markdown ni asteriscos, máximo 120 palabras, en este orden: 1) Evaluación del setup. 2) Disciplina y emoción (campos plan y emo). 3) Una mejora concreta para el próximo trade. Sé directo y honesto; si faltan datos, dilo. No des asesoría financiera ni prometas resultados.`;
+
+let db; 
+try{
+  const app=initializeApp(FB);
+  db=getFirestore(app);
+}catch(e){console.error(e)}
 
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const pad=n=>String(n).padStart(2,'0'), hoy=()=>new Date().toLocaleDateString('en-CA');
@@ -20,8 +29,8 @@ const cls=n=>n>BE?'win':n<-BE?'loss':n?'be':'';
 
 function toast(msg,type=''){const t=document.createElement('div');t.className='toast '+type;t.textContent=msg;$('#toasts').append(t);setTimeout(()=>t.remove(),3600)}
 
-/* ---------- Datos: colección nueva + trades antiguos del documento original ---------- */
-function norm(t,i){ // normaliza un trade antiguo (acepta Timestamp, YYYY-M-D y resultado como texto)
+/* ---------- Datos ---------- */
+function norm(t,i){ 
   let f=t.fecha;if(f?.toDate)f=f.toDate().toLocaleDateString('en-CA');
   const m=String(f??'').match(/^(\d{4})-(\d{1,2})-(\d{1,2})/),r=parseFloat(t.resultado);
   if(!m||isNaN(r))return null;
@@ -40,7 +49,7 @@ const store={
     }catch(e){console.error(e);S.offline=true;S.trades=ls('vextor-trades')||[];
       $('#sp-msg').textContent='Sin conexión: usando datos locales';toast('No se pudo leer Firebase (revisa tus reglas de Firestore)','err')}
   },
-  async migrar(v){ // ids fijos: si se repite no duplica. El array antiguo queda como respaldo.
+  async migrar(v){ 
     try{await Promise.all(v.map(({id,...d})=>setDoc(doc(db,COL,id),d)));await setDoc(doc(db,...OLD),{migrado:true},{merge:true});toast(`${v.length} trades antiguos migrados`)}
     catch(e){console.warn('Migración pendiente:',e)}
   },
@@ -125,26 +134,61 @@ const renderAll=()=>{kpis();charts();cal();table()};
 /* ---------- Formulario ---------- */
 const open=id=>$('#'+id).classList.add('on'), close=id=>$('#'+id).classList.remove('on');
 function form(t={}){
-  $('#f-id').value=t.id||'';$('#mt').textContent=t.id?'Editar trade':'Registrar trade';$('#ia-out').hidden=true;
+  $('#f-id').value=t.id||'';$('#mt').textContent=t.id?'Editar trade':'Registrar trade';
+  const o=$('#ia-out');o.hidden=!t.ia;o.textContent=t.ia||'';o.dataset.txt=t.ia||'';
   F.forEach(k=>{const el=$('#f-'+k);el.value=t[k]??(k==='fecha'?hoy():el.tagName==='SELECT'?el.options[0].value:'')});
 }
 async function save(){
   const t={};F.forEach(k=>t[k]=$('#f-'+k).value.trim());t.resultado=parseFloat(t.resultado);
+  const iaBox=$('#ia-out');if(!iaBox.hidden&&iaBox.dataset.txt)t.ia=iaBox.dataset.txt;
   if(!t.fecha||isNaN(t.resultado))return toast('Completa la fecha y el resultado neto','err');
   const id=$('#f-id').value;if(id)t.id=id;
   const s=await store.save(t);
   S.trades=id?S.trades.map(x=>x.id===id?s:x):[...S.trades,s];
   local();renderAll();close('modal-trade');toast(id?'Trade actualizado':'Trade guardado');
 }
+
+/* ---------- IA (Sin captchas ni App Check) ---------- */
 async function analizar(){
-  const out=$('#ia-out');out.hidden=false;
-  if(!IA_ENDPOINT){out.innerHTML='<b>Modo demo.</b> La IA real aún no está conectada: define IA_ENDPOINT en diario.js con tu Cloud Function.';return}
-  out.textContent='Analizando…';
-  try{const t={};F.forEach(k=>t[k]=$('#f-'+k).value);
-    const r=await fetch(IA_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(t)});
-    out.textContent=(await r.json()).analisis||'La IA no devolvió respuesta.'}
-  catch(e){out.textContent='No se pudo contactar con la IA. Inténtalo de nuevo.'}
+  const out=$('#ia-out'),btn=$('#ia');out.hidden=false;
+  
+  if(GEMINI_API_KEY === "PON_TU_API_KEY_AQUI") {
+      out.textContent='Falta tu API Key de Gemini. Debes ponerla en la línea 10 de diario.js.';
+      return;
+  }
+  
+  const t={};F.forEach(k=>t[k]=$('#f-'+k).value.trim());
+  if(!t.resultado){out.textContent='Escribe al menos el resultado neto para analizar.';return}
+  
+  btn.disabled=true;out.textContent='Analizando…';
+  
+  try{
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${GEMINI_API_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        // CORRECCIÓN: systemInstruction en camelCase y parts como array
+        systemInstruction: { parts: [{ text: SYSTEM }] },
+        contents: [{ parts: [{ text: 'Trade a analizar (JSON):\n' + JSON.stringify(t) }] }],
+        generationConfig: { temperature: 0.6 }
+      })
+    });
+
+    const data = await response.json();
+    
+    // Si Google devuelve un error de formato o de API key, lo lanzamos
+    if (data.error) throw new Error(data.error.message);
+    
+    const txt = data.candidates[0].content.parts[0].text;
+    out.textContent=txt; out.dataset.txt=txt;
+    
+  }catch(e){
+    console.error("Error detallado:", e);
+    // Ahora verás exactamente qué falló en la pantalla
+    out.textContent='Error de API: ' + e.message;
+  }finally{btn.disabled=false}
 }
+
 function csv(){
   const q=v=>`"${String(v??'').replace(/"/g,'""')}"`;
   const txt=[['id',...F].map(q).join(','),...S.trades.map(t=>[t.id,...F.map(k=>t[k])].map(q).join(','))].join('\n');
@@ -162,7 +206,7 @@ function theme(){
   $('#hue').value=p.hue;$('#blur').value=p.blur;$('#cur').value=p.cur;$('#font').value=p.font;$('#ital').checked=p.italic;
   if(ch.eq){charts();kpis()}
 }
-function adaptar(im){ // luminancia y color dominante -> modo, acento y cristal
+function adaptar(im){ 
   const c=document.createElement('canvas');c.width=c.height=32;const x=c.getContext('2d');x.drawImage(im,0,0,32,32);
   const d=x.getImageData(0,0,32,32).data,n=d.length/4;let r=0,g=0,b=0;
   for(let i=0;i<d.length;i+=4){r+=d[i];g+=d[i+1];b+=d[i+2]}r/=n;g/=n;b/=n;
