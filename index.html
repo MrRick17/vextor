@@ -1,131 +1,127 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-mode="dark">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vextor | Trading Dashboard</title>
-    <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vextor | Premium Journal</title>
+<script>try{const p=JSON.parse(localStorage.getItem('vextor-pref'));if(p){const r=document.documentElement;r.dataset.mode=p.mode==='auto'?(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'):p.mode;r.style.setProperty('--hue',p.hue)}}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&family=Manrope:wght@500;700;800&family=Poppins:wght@400;600;800&family=Playfair+Display:ital,wght@0,600;1,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
 </head>
-<body>
+<body class="loading">
 
-    <!-- BARRA DE NAVEGACIÓN -->
-    <header class="top-nav">
-        <div class="nav-container">
-            <h1>VEXTOR <span>QUANT</span></h1>
-            <nav class="nav-tabs">
-                <button class="tab-btn active" onclick="switchTab('dashboard')">
-                    <i class="fa-solid fa-chart-line"></i> Dashboard
-                </button>
-                <button class="tab-btn" onclick="switchTab('calendario')">
-                    <i class="fa-solid fa-calendar-days"></i> Calendario
-                </button>
-            </nav>
-        </div>
-    </header>
+<div id="splash" role="status" aria-label="Cargando Vextor">
+  <div class="sp-in">
+    <div class="sp-logo"><span>V</span></div>
+    <div class="sp-name" aria-hidden="true"><i style="--n:0">V</i><i style="--n:1">e</i><i style="--n:2">x</i><i style="--n:3">t</i><i style="--n:4">o</i><i style="--n:5">r</i></div>
+    <p id="sp-msg">Conectando con Firebase…</p>
+    <div class="sp-bar"><b></b></div>
+  </div>
+</div>
 
-    <main class="dashboard-container">
-        
-        <!-- VISTA 1: DASHBOARD -->
-        <div id="view-dashboard" class="tab-content active">
-            <section class="dashboard-kpis">
-                <div class="kpi-card">
-                    <h3>Beneficio Total</h3>
-                    <p id="kpi-profit" class="kpi-value">$0.00</p>
-                </div>
-                <div class="kpi-card">
-                    <h3>Win Rate</h3>
-                    <p id="kpi-winrate" class="kpi-value">0%</p>
-                </div>
-                <div class="kpi-card">
-                    <h3>Total Trades</h3>
-                    <p id="kpi-trades" class="kpi-value">0</p>
-                </div>
-            </section>
+<aside class="sidebar glass" aria-label="Navegación">
+  <div class="sb-top">
+    <div class="logo"><span class="ico"><b>V</b></span><span class="nt">Vextor</span></div>
+    <nav>
+      <button class="nav on" data-tab="dashboard"><span class="ico"><i class="fa-solid fa-chart-pie"></i></span><span class="nt">Dashboard</span></button>
+      <button class="nav" data-tab="calendario"><span class="ico"><i class="fa-solid fa-calendar-day"></i></span><span class="nt">Calendario</span></button>
+      <button class="nav" data-tab="trades"><span class="ico"><i class="fa-solid fa-list"></i></span><span class="nt">Trades</span></button>
+      <button class="nav act" data-open="modal-trade"><span class="ico"><i class="fa-solid fa-plus"></i></span><span class="nt">Nuevo trade</span></button>
+    </nav>
+  </div>
+  <button class="nav" data-open="modal-cfg"><span class="ico"><i class="fa-solid fa-sliders"></i></span><span class="nt">Configuración</span></button>
+</aside>
 
-            <section class="view-section" id="view-grafica">
-                <h2>Rendimiento Histórico</h2>
-                <div class="chart-container">
-                    <canvas id="equityChart"></canvas>
-                </div>
-            </section>
-        </div>
+<main class="main"><div class="wrap">
+  <header class="head glass"><h1 id="title">Dashboard</h1></header>
 
-        <!-- VISTA 2: CALENDARIO -->
-        <div id="view-calendario" class="tab-content">
-            <section class="view-section">
-                <div class="calendar-header">
-                    <button id="btn-prev-month"><i class="fa-solid fa-chevron-left"></i></button>
-                    <div class="mes-info">
-                        <h2 id="mes-actual">Cargando...</h2>
-                        <span id="mes-total-profit" class="mes-total">$0.00</span>
-                    </div>
-                    <button id="btn-next-month"><i class="fa-solid fa-chevron-right"></i></button>
-                </div>
-                
-                <div class="calendar-wrapper">
-                    <div class="calendar-grid">
-                        <div class="day-name">Lun</div>
-                        <div class="day-name">Mar</div>
-                        <div class="day-name">Mié</div>
-                        <div class="day-name">Jue</div>
-                        <div class="day-name">Vie</div>
-                        <div class="day-name">Sáb</div>
-                        <div class="day-name">Dom</div>
-                        <div class="day-name highlight-col">Total Sem</div>
-                        
-                        <div id="calendar-days-container" class="days-container" style="display: contents;"></div>
-                    </div>
-                </div>
-            </section>
-        </div>
+  <section id="v-dashboard" class="view on">
+    <div class="kpis" id="kpis"></div>
+    <div class="row">
+      <div class="glass spot card"><h2>Curva de capital</h2><div class="ch"><canvas id="eq"></canvas></div></div>
+      <div class="glass spot card"><h2>PnL por día de la semana</h2><div class="ch"><canvas id="wd"></canvas></div></div>
+    </div>
+  </section>
 
-    </main>
+  <section id="v-calendario" class="view">
+    <div class="glass card">
+      <div class="cal-head">
+        <button class="gbtn sq" id="prev" aria-label="Mes anterior"><i class="fa-solid fa-chevron-left"></i></button>
+        <div><h2 id="mes">Cargando…</h2><span id="mes-pnl" class="num"></span></div>
+        <button class="gbtn sq" id="next" aria-label="Mes siguiente"><i class="fa-solid fa-chevron-right"></i></button>
+      </div>
+      <div class="cal">
+        <i>Lun</i><i>Mar</i><i>Mié</i><i>Jue</i><i>Vie</i><i>Sáb</i><i>Dom</i><i>Semana</i>
+        <div id="days" class="days"></div>
+      </div>
+    </div>
+  </section>
 
-    <!-- CONEXIÓN A FIREBASE Y CARGA DE DATOS -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+  <section id="v-trades" class="view">
+    <div class="glass card">
+      <div class="bar"><h2>Historial</h2><div><span id="chip"></span><button class="gbtn" id="csv"><i class="fa-solid fa-download"></i> CSV</button></div></div>
+      <div class="tw"><table id="tbl"></table></div>
+    </div>
+  </section>
+</div></main>
 
-        // PEGA AQUÍ TUS CREDENCIALES DE FIREBASE
-        const firebaseConfig = {
-  apiKey: "AIzaSyBhY_LqT0DXU9mI27VNrIZZVboOlNFQzSs",
-  authDomain: "vextor-d627c.firebaseapp.com",
-  projectId: "vextor-d627c",
-  storageBucket: "vextor-d627c.firebasestorage.app",
-  messagingSenderId: "158596639790",
-  appId: "1:158596639790:web:88f98a25dba712a61783bf"
-};
+<div id="modal-trade" class="ov" role="dialog" aria-modal="true" aria-label="Registrar trade">
+  <div class="glass modal">
+    <div class="mh"><h2 id="mt">Registrar trade</h2><button class="x" data-close="modal-trade" aria-label="Cerrar"><i class="fa-solid fa-xmark"></i></button></div>
+    <input type="hidden" id="f-id">
+    <div class="g2">
+      <label>Fecha<input type="date" id="f-fecha" class="inp"></label>
+      <label>Resultado neto<input type="number" id="f-resultado" class="inp" placeholder="0.00" step="0.01"></label>
+    </div>
+    <label>Activo<input type="text" id="f-activo" class="inp" placeholder="ej. XAU/USD"></label>
+    <div class="g2">
+      <label>Temporalidad<select id="f-tf" class="inp"><option>M1</option><option>M5</option><option>M15</option><option>H1</option><option>H4</option><option>D1</option></select></label>
+      <label>Dirección<select id="f-dir" class="inp"><option>Long</option><option>Short</option></select></label>
+    </div>
+    <div class="g2">
+      <label>Setup<select id="f-setup" class="inp"><option>BSL / SSL</option><option>Inducement</option><option>Order Block</option><option>FVG</option><option>Otro</option></select></label>
+      <label>Sesión<select id="f-ses" class="inp"><option>Asia</option><option>Londres</option><option>Nueva York</option></select></label>
+    </div>
+    <div class="g2">
+      <label>¿Seguí mi plan?<select id="f-plan" class="inp"><option value="si">Sí</option><option value="no">No</option></select></label>
+      <label>Emoción<select id="f-emo" class="inp"><option>Calmado</option><option>Confiado</option><option>Ansioso</option><option>FOMO</option><option>Venganza</option></select></label>
+    </div>
+    <label>Notas<textarea id="f-notas" class="inp" rows="2" placeholder="Contexto de la entrada…"></textarea></label>
+    <div id="ia-out" class="ia-out" hidden></div>
+    <div class="g2">
+      <button class="gbtn wide" id="ia"><i class="fa-solid fa-wand-magic-sparkles"></i> Analizar con IA</button>
+      <button class="btn wide" id="save"><i class="fa-solid fa-floppy-disk"></i> Guardar trade</button>
+    </div>
+  </div>
+</div>
 
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
+<div id="modal-cfg" class="ov" role="dialog" aria-modal="true" aria-label="Configuración">
+  <div class="glass modal sm">
+    <div class="mh"><h2>Configuración</h2><button class="x" data-close="modal-cfg" aria-label="Cerrar"><i class="fa-solid fa-xmark"></i></button></div>
+    <h4>Modo</h4>
+    <div class="seg"><button data-m="auto">Auto</button><button data-m="light">Claro</button><button data-m="dark">Oscuro</button></div>
+    <h4>Color de acento</h4>
+    <input type="range" id="hue" class="hue" min="0" max="360" aria-label="Tono">
+    <h4>Wallpaper</h4>
+    <div class="walls">
+      <button class="w0" data-w="0" aria-label="Sin wallpaper"></button><button class="w1" data-w="1" aria-label="Noche"></button><button class="w2" data-w="2" aria-label="Violeta"></button><button class="w3" data-w="3" aria-label="Esmeralda"></button>
+    </div>
+    <label class="gbtn wide up"><i class="fa-solid fa-upload"></i> Subir imagen (el tema se adapta)<input type="file" id="wall-in" accept="image/*" hidden></label>
+    <h4>Nivel de cristal</h4>
+    <input type="range" id="blur" min="5" max="60" aria-label="Desenfoque">
+    <div class="g2">
+      <label>Divisa<select id="cur" class="inp"><option value="$">USD ($)</option><option value="€">EUR (€)</option><option value="£">GBP (£)</option></select></label>
+      <label>Tipografía<select id="font" class="inp"><option value="'Inter',sans-serif">Inter</option><option value="'Poppins',sans-serif">Poppins</option><option value="'Playfair Display',serif">Playfair</option><option value="monospace">Mono</option></select></label>
+    </div>
+    <label class="sw">Cursiva<input type="checkbox" id="ital"><span></span></label>
+  </div>
+</div>
 
-        window.cargarTradesDesdeFirebase = async function() {
-            try {
-                const docRef = doc(db, "vextor_data", "diario_personal");
-                const docSnap = await getDoc(docRef);
-                
-                if (docSnap.exists() && docSnap.data().trades) {
-                    const tradesRemotos = docSnap.data().trades;
-                    console.log("Trades cargados de Firebase:", tradesRemotos);
-                    actualizarKPIs(tradesRemotos);
-                    renderizarGrafica(tradesRemotos);
-                    renderizarCalendario(tradesRemotos);
-                } else {
-                    console.log("No hay trades registrados todavía.");
-                    actualizarKPIs([]);
-                    renderizarGrafica([]);
-                    renderizarCalendario([]);
-                }
-            } catch (error) {
-                console.error("Error al obtener datos de Firebase:", error);
-            }
-        };
-
-        // Ejecutar al cargar la página
-        window.cargarTradesDesdeFirebase();
-    </script>
-    <script src="diario.js"></script>
+<div id="toasts" aria-live="polite"></div>
+<script type="module" src="diario.js"></script>
 </body>
 </html>

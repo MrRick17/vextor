@@ -1,184 +1,219 @@
-function switchTab(tabId) {
-    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-    document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
-    
-    document.getElementById(`view-${tabId}`).classList.add('active');
-    document.querySelector(`button[onclick="switchTab('${tabId}')"]`).classList.add('active');
+import {initializeApp} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import {getFirestore,collection,getDocs,getDoc,addDoc,setDoc,doc,deleteDoc} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+const FB={apiKey:"AIzaSyBhY_LqT0DXU9mI27VNrIZZVboOlNFQzSs",authDomain:"vextor-d627c.firebaseapp.com",projectId:"vextor-d627c",storageBucket:"vextor-d627c.firebasestorage.app",messagingSenderId:"158596639790",appId:"1:158596639790:web:88f98a25dba712a61783bf"};
+const COL='vextor_trades', OLD=['vextor_data','diario_personal'], BE=2, IA_ENDPOINT='', MIN_SPLASH=2000; // IA_ENDPOINT: URL de tu Cloud Function
+const C={win:'#34d399',loss:'#f87171'};
+const F=['fecha','resultado','activo','tf','dir','setup','ses','plan','emo','notas'];
+const WALLS=[null,'linear-gradient(135deg,#020617,#0f172a)','linear-gradient(135deg,#2e1065,#172554)','linear-gradient(135deg,#022c22,#064e3b)'];
+let db; try{db=getFirestore(initializeApp(FB))}catch(e){}
+
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const pad=n=>String(n).padStart(2,'0'), hoy=()=>new Date().toLocaleDateString('en-CA');
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const sum=a=>a.reduce((x,t)=>x+t.resultado,0);
+const ls=(k,v)=>{try{if(v===undefined)return JSON.parse(localStorage.getItem(k));localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
+const S={trades:[],filter:null,offline:false,m:new Date().getMonth(),y:new Date().getFullYear(),
+  pref:{mode:'auto',hue:250,blur:24,font:"'Inter',sans-serif",cur:'$',italic:false,wall:null,...ls('vextor-pref')}};
+const fmt=n=>(n<0?'-':n>0?'+':'')+S.pref.cur+Math.abs(n).toFixed(2);
+const cls=n=>n>BE?'win':n<-BE?'loss':n?'be':'';
+
+function toast(msg,type=''){const t=document.createElement('div');t.className='toast '+type;t.textContent=msg;$('#toasts').append(t);setTimeout(()=>t.remove(),3600)}
+
+/* ---------- Datos: colección nueva + trades antiguos del documento original ---------- */
+function norm(t,i){ // normaliza un trade antiguo (acepta Timestamp, YYYY-M-D y resultado como texto)
+  let f=t.fecha;if(f?.toDate)f=f.toDate().toLocaleDateString('en-CA');
+  const m=String(f??'').match(/^(\d{4})-(\d{1,2})-(\d{1,2})/),r=parseFloat(t.resultado);
+  if(!m||isNaN(r))return null;
+  return{...t,fecha:`${m[1]}-${pad(m[2])}-${pad(m[3])}`,resultado:r,id:'legacy-'+i};
+}
+const local=()=>ls('vextor-trades',S.trades);
+const store={
+  async load(){
+    try{
+      const [cs,od]=await Promise.all([getDocs(collection(db,COL)),getDoc(doc(db,...OLD)).catch(()=>null)]);
+      const nuevos=cs.docs.map(d=>({id:d.id,...d.data()})),ids=new Set(nuevos.map(t=>t.id));
+      const old=od?.exists()?od.data():null;let viejos=[];
+      if(old&&!old.migrado&&Array.isArray(old.trades))viejos=old.trades.map(norm).filter(t=>t&&!ids.has(t.id));
+      S.trades=[...nuevos,...viejos];local();
+      if(viejos.length)store.migrar(viejos);
+    }catch(e){console.error(e);S.offline=true;S.trades=ls('vextor-trades')||[];
+      $('#sp-msg').textContent='Sin conexión: usando datos locales';toast('No se pudo leer Firebase (revisa tus reglas de Firestore)','err')}
+  },
+  async migrar(v){ // ids fijos: si se repite no duplica. El array antiguo queda como respaldo.
+    try{await Promise.all(v.map(({id,...d})=>setDoc(doc(db,COL,id),d)));await setDoc(doc(db,...OLD),{migrado:true},{merge:true});toast(`${v.length} trades antiguos migrados`)}
+    catch(e){console.warn('Migración pendiente:',e)}
+  },
+  async save(t){const {id,...d}=t;
+    try{if(id){await setDoc(doc(db,COL,id),d);return t}return {...d,id:(await addDoc(collection(db,COL),d)).id}}
+    catch(e){toast('No se pudo guardar en Firebase (copia local guardada)','err');return {...d,id:id||'l'+Date.now()}}},
+  async del(id){try{await deleteDoc(doc(db,COL,id))}catch(e){toast('No se pudo borrar en Firebase','err')}}
+};
+
+/* ---------- Métricas ---------- */
+function stats(ts){
+  const n=ts.length,w=ts.filter(t=>t.resultado>0),l=ts.filter(t=>t.resultado<0),gw=sum(w),gl=Math.abs(sum(l)),pnl=sum(ts);
+  let eq=0,pk=0,dd=0;[...ts].sort((a,b)=>a.fecha.localeCompare(b.fecha)).forEach(t=>{eq+=t.resultado;pk=Math.max(pk,eq);dd=Math.max(dd,pk-eq)});
+  const by={};ts.forEach(t=>by[t.fecha]=(by[t.fecha]||0)+t.resultado);const days=Object.values(by);
+  const pl=ts.filter(t=>t.plan);
+  return{n,pnl,wr:n?w.length/n*100:0,pf:gl?gw/gl:gw?Infinity:0,exp:n?pnl/n:0,dd,best:days.length?Math.max(...days):0,worst:days.length?Math.min(...days):0,
+    adhN:pl.length,adh:pl.length?pl.filter(t=>t.plan==='si').length/pl.length*100:0};
+}
+function count(el,to,f){if(!isFinite(to)||matchMedia('(prefers-reduced-motion:reduce)').matches)return;const t0=performance.now();
+  (function step(t){const p=Math.min(1,(t-t0)/700);el.textContent=f(to*(1-Math.pow(1-p,3)));if(p<1)requestAnimationFrame(step)})(t0)}
+function kpis(){
+  const s=stats(S.trades),sg=v=>v>=0?'pos':'neg';
+  const it=[['Net PnL',s.pnl,fmt,sg(s.pnl)],['Win Rate',s.wr,v=>v.toFixed(1)+'%',''],['Profit Factor',s.pf,v=>isFinite(v)?v.toFixed(2):'∞',''],
+    ['Expectativa por trade',s.exp,fmt,sg(s.exp)],['Máx. drawdown',-s.dd,fmt,s.dd?'neg':''],['Mejor día',s.best,fmt,s.best>0?'pos':''],
+    ['Peor día',s.worst,fmt,s.worst<0?'neg':''],['Plan seguido',s.adh,v=>s.adhN?v.toFixed(0)+'%':'—','']];
+  $('#kpis').innerHTML=it.map((k,i)=>`<div class="glass spot kpi" style="--n:${i}"><h3>${k[0]}</h3><p class="kv ${k[3]}">${k[2](k[1])}</p></div>`).join('');
+  $$('.kv').forEach((el,i)=>count(el,it[i][1],it[i][2]));
 }
 
-let fechaActual = new Date();
-let mesActual = fechaActual.getMonth();
-let añoActual = fechaActual.getFullYear();
-let chartInstance = null;
-let tradesGlobales = []; // Almacena los trades en memoria
+/* ---------- Gráficas ---------- */
+let ch={};
+function charts(){
+  Chart.defaults.color=getComputedStyle(document.documentElement).getPropertyValue('--mu').trim();
+  Chart.defaults.font.family=getComputedStyle(document.body).fontFamily;
+  const grid={color:'rgba(150,150,150,.12)'};
+  let eq=0;const lab=['Inicio'],dat=[0];
+  [...S.trades].sort((a,b)=>a.fecha.localeCompare(b.fecha)).forEach(t=>{eq+=t.resultado;lab.push(t.fecha);dat.push(+eq.toFixed(2))});
+  ch.eq?.destroy();
+  ch.eq=new Chart($('#eq'),{type:'line',data:{labels:lab,datasets:[{data:dat,borderWidth:3,tension:.4,borderCapStyle:'round',borderJoinStyle:'round',pointRadius:dat.length>40?0:3,borderColor:C.win,
+    fill:{target:'origin',above:'rgba(52,211,153,.16)',below:'rgba(248,113,113,.16)'},segment:{borderColor:c=>c.p1.parsed.y>=0?C.win:C.loss},
+    pointBackgroundColor:dat.map(v=>v>=0?C.win:C.loss)}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{cornerRadius:14,callbacks:{label:c=>fmt(c.parsed.y)}}},scales:{x:{display:false},y:{grid,border:{display:false},ticks:{callback:v=>S.pref.cur+v}}}}});
+  const wd=[0,0,0,0,0,0,0];
+  S.trades.forEach(t=>{const [y,m,d]=t.fecha.split('-');wd[(new Date(y,m-1,d).getDay()+6)%7]+=t.resultado});
+  ch.wd?.destroy();
+  ch.wd=new Chart($('#wd'),{type:'bar',data:{labels:['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'],datasets:[{data:wd.map(v=>+v.toFixed(2)),borderRadius:99,borderSkipped:false,maxBarThickness:22,backgroundColor:wd.map(v=>v>=0?C.win:C.loss)}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{cornerRadius:14,callbacks:{label:c=>fmt(c.parsed.y)}}},scales:{x:{grid:{display:false},border:{display:false}},y:{grid,border:{display:false}}}}});
+}
 
-document.addEventListener("DOMContentLoaded", () => {
-    // Controles de navegación de meses
-    document.getElementById('btn-prev-month').addEventListener('click', () => {
-        mesActual--;
-        if (mesActual < 0) { mesActual = 11; añoActual--; }
-        renderizarCalendario(tradesGlobales);
-    });
+/* ---------- Calendario heatmap ---------- */
+function cal(){
+  const key=`${S.y}-${pad(S.m+1)}`,by={};let pm=0,max=1;
+  S.trades.forEach(t=>by[t.fecha]=(by[t.fecha]||0)+t.resultado);
+  Object.entries(by).forEach(([f,v])=>{max=Math.max(max,Math.abs(v));if(f.startsWith(key))pm+=v});
+  $('#mes').textContent=`${['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][S.m]} ${S.y}`;
+  $('#mes-pnl').innerHTML=`Mes: <span class="${pm>=0?'pos':'neg'}">${fmt(pm)}</span>`;
+  document.documentElement.style.setProperty('--ambient',pm>BE?'var(--profit)':pm<-BE?'var(--loss)':'var(--accent)');
+  const dim=new Date(S.y,S.m+1,0).getDate(),first=(new Date(S.y,S.m,1).getDay()+6)%7;
+  let h='',n=0,wk=0;
+  for(let i=0;i<first;i++,n++)h+='<div class="cd off"></div>';
+  for(let d=1;d<=dim;d++){
+    const k=`${key}-${pad(d)}`,v=by[k]||0;wk+=v;n++;
+    h+=`<button class="cd ${cls(v)}" data-day="${k}" style="--i:${v?Math.max(.18,Math.abs(v)/max):0}" aria-label="${k}"><span>${d}</span><b>${v?fmt(v):''}</b></button>`;
+    if(n%7===0||d===dim){while(n%7){h+='<div class="cd off"></div>';n++}
+      h+=`<div class="cd wk ${cls(wk)}" style="--i:.5"><span>Total</span><b>${fmt(wk)}</b></div>`;wk=0}
+  }
+  $('#days').innerHTML=h;
+}
 
-    document.getElementById('btn-next-month').addEventListener('click', () => {
-        mesActual++;
-        if (mesActual > 11) { mesActual = 0; añoActual++; }
-        renderizarCalendario(tradesGlobales);
-    });
+/* ---------- Tabla ---------- */
+function table(){
+  let ts=[...S.trades].sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  if(S.filter)ts=ts.filter(t=>t.fecha===S.filter);
+  $('#chip').innerHTML=S.filter?`<button class="gbtn" data-clear>${S.filter} <i class="fa-solid fa-xmark"></i></button> `:'';
+  $('#tbl').innerHTML=ts.length?`<thead><tr><th>Fecha</th><th>Activo</th><th>Dir.</th><th>Setup</th><th>Resultado</th><th></th></tr></thead><tbody>`+
+    ts.map(t=>`<tr><td>${esc(t.fecha)}</td><td>${esc(t.activo||'—')}</td><td>${esc(t.dir||'—')}</td><td>${esc(t.setup||'—')}</td><td class="num ${t.resultado>=0?'pos':'neg'}">${fmt(t.resultado)}</td>
+    <td class="ac"><button class="gbtn" data-edit="${esc(t.id)}" aria-label="Editar"><i class="fa-solid fa-pen"></i></button> <button class="gbtn" data-del="${esc(t.id)}" aria-label="Eliminar"><i class="fa-solid fa-trash"></i></button></td></tr>`).join('')+'</tbody>'
+    :'<tbody><tr><td class="empty">Aún no hay trades. Registra el primero con “Nuevo trade”.</td></tr></tbody>';
+}
+const renderAll=()=>{kpis();charts();cal();table()};
+
+/* ---------- Formulario ---------- */
+const open=id=>$('#'+id).classList.add('on'), close=id=>$('#'+id).classList.remove('on');
+function form(t={}){
+  $('#f-id').value=t.id||'';$('#mt').textContent=t.id?'Editar trade':'Registrar trade';$('#ia-out').hidden=true;
+  F.forEach(k=>{const el=$('#f-'+k);el.value=t[k]??(k==='fecha'?hoy():el.tagName==='SELECT'?el.options[0].value:'')});
+}
+async function save(){
+  const t={};F.forEach(k=>t[k]=$('#f-'+k).value.trim());t.resultado=parseFloat(t.resultado);
+  if(!t.fecha||isNaN(t.resultado))return toast('Completa la fecha y el resultado neto','err');
+  const id=$('#f-id').value;if(id)t.id=id;
+  const s=await store.save(t);
+  S.trades=id?S.trades.map(x=>x.id===id?s:x):[...S.trades,s];
+  local();renderAll();close('modal-trade');toast(id?'Trade actualizado':'Trade guardado');
+}
+async function analizar(){
+  const out=$('#ia-out');out.hidden=false;
+  if(!IA_ENDPOINT){out.innerHTML='<b>Modo demo.</b> La IA real aún no está conectada: define IA_ENDPOINT en diario.js con tu Cloud Function.';return}
+  out.textContent='Analizando…';
+  try{const t={};F.forEach(k=>t[k]=$('#f-'+k).value);
+    const r=await fetch(IA_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(t)});
+    out.textContent=(await r.json()).analisis||'La IA no devolvió respuesta.'}
+  catch(e){out.textContent='No se pudo contactar con la IA. Inténtalo de nuevo.'}
+}
+function csv(){
+  const q=v=>`"${String(v??'').replace(/"/g,'""')}"`;
+  const txt=[['id',...F].map(q).join(','),...S.trades.map(t=>[t.id,...F.map(k=>t[k])].map(q).join(','))].join('\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'text/csv'}));a.download='vextor-trades.csv';a.click();
+}
+
+/* ---------- Temas ---------- */
+const savePref=()=>ls('vextor-pref',S.pref);
+function theme(){
+  const p=S.pref,r=document.documentElement;
+  r.dataset.mode=p.mode==='auto'?(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'):p.mode;
+  r.style.setProperty('--hue',p.hue);r.style.setProperty('--blur',p.blur+'px');r.style.setProperty('--wall',p.wall||'none');r.style.setProperty('--ff',p.font);
+  document.body.classList.toggle('it',p.italic);
+  $$('.seg button').forEach(b=>b.classList.toggle('on',b.dataset.m===p.mode));
+  $('#hue').value=p.hue;$('#blur').value=p.blur;$('#cur').value=p.cur;$('#font').value=p.font;$('#ital').checked=p.italic;
+  if(ch.eq){charts();kpis()}
+}
+function adaptar(im){ // luminancia y color dominante -> modo, acento y cristal
+  const c=document.createElement('canvas');c.width=c.height=32;const x=c.getContext('2d');x.drawImage(im,0,0,32,32);
+  const d=x.getImageData(0,0,32,32).data,n=d.length/4;let r=0,g=0,b=0;
+  for(let i=0;i<d.length;i+=4){r+=d[i];g+=d[i+1];b+=d[i+2]}r/=n;g/=n;b/=n;
+  const lum=(.2126*r+.7152*g+.0722*b)/255,mx=Math.max(r,g,b),dl=mx-Math.min(r,g,b);let h=S.pref.hue;
+  if(dl>12){h=mx===r?((g-b)/dl)%6:mx===g?(b-r)/dl+2:(r-g)/dl+4;h=Math.round((h*60+360)%360)}
+  Object.assign(S.pref,{mode:lum>.5?'light':'dark',hue:h,blur:lum>.35&&lum<.7?32:22});toast('Tema ajustado al wallpaper');
+}
+
+/* ---------- Eventos ---------- */
+const TITLES={dashboard:'Dashboard',calendario:'Calendario de Trading',trades:'Trades'};
+function tab(id){
+  $$('.view').forEach(v=>v.classList.toggle('on',v.id==='v-'+id));
+  $$('[data-tab]').forEach(b=>b.classList.toggle('on',b.dataset.tab===id));
+  $('#title').textContent=TITLES[id];if(id!=='trades')S.filter=null;table();
+}
+document.addEventListener('click',e=>{
+  const g=s=>e.target.closest(s);let el;
+  if(el=g('[data-tab]'))tab(el.dataset.tab);
+  else if(el=g('[data-open]')){if(el.dataset.open==='modal-trade')form();open(el.dataset.open)}
+  else if(el=g('[data-close]'))close(el.dataset.close);
+  else if(e.target.classList.contains('ov'))e.target.classList.remove('on');
+  else if(el=g('[data-day]')){const d=el.dataset.day;
+    if(S.trades.some(t=>t.fecha===d)){S.filter=d;tab('trades')}else{form({fecha:d});open('modal-trade')}}
+  else if(g('[data-clear]')){S.filter=null;table()}
+  else if(el=g('[data-edit]')){form(S.trades.find(t=>t.id===el.dataset.edit));open('modal-trade')}
+  else if(el=g('[data-del]')){if(confirm('¿Eliminar este trade? No se puede deshacer.')){const id=el.dataset.del;store.del(id);S.trades=S.trades.filter(t=>t.id!==id);local();renderAll();toast('Trade eliminado')}}
+  else if(el=g('.seg button')){S.pref.mode=el.dataset.m;savePref();theme()}
+  else if(el=g('[data-w]')){const i=+el.dataset.w;S.pref.wall=WALLS[i];if(i)S.pref.mode='dark';savePref();theme()}
 });
+document.addEventListener('keydown',e=>{if(e.key==='Escape')$$('.ov.on').forEach(o=>o.classList.remove('on'))});
+document.addEventListener('pointermove',e=>{const c=e.target.closest?.('.spot');if(c){const b=c.getBoundingClientRect();c.style.setProperty('--mx',e.clientX-b.left+'px');c.style.setProperty('--my',e.clientY-b.top+'px')}});
+$('#save').onclick=save;$('#ia').onclick=analizar;$('#csv').onclick=csv;
+$('#prev').onclick=()=>{if(--S.m<0){S.m=11;S.y--}cal()};
+$('#next').onclick=()=>{if(++S.m>11){S.m=0;S.y++}cal()};
+$('#hue').oninput=e=>{S.pref.hue=+e.target.value;savePref();theme()};
+$('#blur').oninput=e=>{S.pref.blur=+e.target.value;savePref();theme()};
+$('#cur').onchange=e=>{S.pref.cur=e.target.value;savePref();renderAll()};
+$('#font').onchange=e=>{S.pref.font=e.target.value;savePref();theme()};
+$('#ital').onchange=e=>{S.pref.italic=e.target.checked;savePref();theme()};
+$('#wall-in').onchange=e=>{const f=e.target.files[0];if(!f)return;const rd=new FileReader();
+  rd.onload=()=>{const im=new Image();im.onload=()=>{adaptar(im);S.pref.wall=`url(${rd.result})`;savePref();theme()};im.src=rd.result};rd.readAsDataURL(f)};
+matchMedia('(prefers-color-scheme:dark)').addEventListener('change',()=>S.pref.mode==='auto'&&theme());
 
-function actualizarKPIs(trades) {
-    tradesGlobales = trades; // Guardar referencia global
-    let beneficioTotal = 0;
-    let operacionesGanadoras = 0;
-    let totalOperaciones = trades.length;
-
-    trades.forEach(t => {
-        beneficioTotal += t.resultado;
-        if (t.resultado > 0) operacionesGanadoras++;
-    });
-
-    const winRate = totalOperaciones > 0 ? ((operacionesGanadoras / totalOperaciones) * 100).toFixed(1) : 0;
-
-    const kpiProfit = document.getElementById('kpi-profit');
-    kpiProfit.textContent = `$${beneficioTotal.toFixed(2)}`;
-    kpiProfit.style.color = beneficioTotal >= 0 ? '#34D399' : '#F87171';
-
-    document.getElementById('kpi-winrate').textContent = `${winRate}%`;
-    document.getElementById('kpi-trades').textContent = totalOperaciones;
-}
-
-function renderizarGrafica(trades) {
-    const tradesOrdenados = [...trades].sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
-    let balanceAcumulado = 0;
-    const etiquetas = [];
-    const datosBalance = [];
-
-    tradesOrdenados.forEach(t => {
-        balanceAcumulado += t.resultado;
-        etiquetas.push(t.fecha);
-        datosBalance.push(balanceAcumulado);
-    });
-
-    const canvasElement = document.getElementById('equityChart');
-    if (!canvasElement) return;
-    const ctx = canvasElement.getContext('2d');
-    if (chartInstance) chartInstance.destroy();
-
-    chartInstance = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: etiquetas,
-            datasets: [{
-                label: 'Equity',
-                data: datosBalance,
-                borderColor: '#38BDF8',
-                backgroundColor: 'rgba(56, 189, 248, 0.1)',
-                borderWidth: 2,
-                pointBackgroundColor: '#070B14',
-                pointBorderColor: '#38BDF8',
-                pointRadius: 4,
-                fill: true,
-                tension: 0.3
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
-            scales: {
-                x: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#94A3B8' } },
-                y: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#94A3B8' } }
-            }
-        }
-    });
-}
-
-function renderizarCalendario(trades) {
-    const contenedor = document.getElementById('calendar-days-container');
-    const tituloMes = document.getElementById('mes-actual');
-    const totalMesSpan = document.getElementById('mes-total-profit');
-    
-    if (!contenedor || !tituloMes) return;
-    contenedor.innerHTML = '';
-
-    const nombresMeses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
-    tituloMes.textContent = `${nombresMeses[mesActual]} ${añoActual}`;
-
-    let profitMensual = 0;
-    const tradesPorDia = {};
-    
-    trades.forEach(t => {
-        if (t.fecha) {
-            if (!tradesPorDia[t.fecha]) tradesPorDia[t.fecha] = 0;
-            tradesPorDia[t.fecha] += t.resultado;
-            const [y, m, d] = t.fecha.split('-');
-            if (parseInt(y) === añoActual && parseInt(m) === mesActual + 1) {
-                profitMensual += t.resultado;
-            }
-        }
-    });
-
-    if (totalMesSpan) {
-        totalMesSpan.textContent = `Total Mes: $${profitMensual.toFixed(2)}`;
-        if (profitMensual > 0) totalMesSpan.style.color = '#34D399';
-        else if (profitMensual < 0) totalMesSpan.style.color = '#F87171';
-        else totalMesSpan.style.color = '#94A3B8';
-    }
-
-    const primerDiaObj = new Date(añoActual, mesActual, 1);
-    const diasEnMes = new Date(añoActual, mesActual + 1, 0).getDate();
-    let indicePrimerDia = (primerDiaObj.getDay() + 6) % 7;
-
-    let diasAgregados = 0;
-    let profitSemanal = 0;
-
-    for (let i = 0; i < indicePrimerDia; i++) {
-        contenedor.innerHTML += `<div class="cal-day day-empty"></div>`;
-        diasAgregados++;
-    }
-
-    for (let dia = 1; dia <= diasEnMes; dia++) {
-        const mesStr = String(mesActual + 1).padStart(2, '0');
-        const diaStr = String(dia).padStart(2, '0');
-        const fechaString = `${añoActual}-${mesStr}-${diaStr}`;
-
-        const profitDelDia = tradesPorDia[fechaString] || 0;
-        profitSemanal += profitDelDia;
-
-        let claseCss = '';
-        let textoProfit = '';
-
-        if (profitDelDia !== 0) {
-            claseCss = profitDelDia > 0 ? 'day-win' : 'day-loss';
-            textoProfit = `$${profitDelDia.toFixed(2)}`;
-        }
-
-        contenedor.innerHTML += `
-            <div class="cal-day ${claseCss}">
-                <span class="day-num">${dia}</span>
-                <span class="day-profit">${textoProfit}</span>
-            </div>
-        `;
-        diasAgregados++;
-
-        if (diasAgregados % 7 === 0 || dia === diasEnMes) {
-            while (diasAgregados % 7 !== 0) {
-                contenedor.innerHTML += `<div class="cal-day day-empty"></div>`;
-                diasAgregados++;
-            }
-
-            let claseSemana = '';
-            if (profitSemanal > 0) claseSemana = 'day-win';
-            else if (profitSemanal < 0) claseSemana = 'day-loss';
-
-            contenedor.innerHTML += `
-                <div class="cal-day weekly-total ${claseSemana}">
-                    <span class="day-num">Total</span>
-                    <span class="day-profit">$${profitSemanal.toFixed(2)}</span>
-                </div>
-            `;
-            profitSemanal = 0; 
-        }
-    }
-}
+/* ---------- Arranque: la pantalla de carga espera a Firebase ---------- */
+theme();
+const t0=performance.now();
+await store.load();
+if(!S.offline)$('#sp-msg').textContent=S.trades.length?`${S.trades.length} trades cargados`:'Todo listo';
+await new Promise(r=>setTimeout(r,Math.max(0,MIN_SPLASH-(performance.now()-t0))));
+renderAll();
+document.body.classList.replace('loading','intro');
+$('#splash').classList.add('out');
+setTimeout(()=>$('#splash').remove(),900);
+setTimeout(()=>document.body.classList.remove('intro'),2800);
