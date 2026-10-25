@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Vextor | Premium Journal</title>
-<script>try{const p=JSON.parse(localStorage.getItem('vextor-pref'));if(p){const r=document.documentElement;r.dataset.mode=p.mode==='auto'?(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'):p.mode;r.style.setProperty('--hue',p.hue)}}catch(e){}</script>
+<script>try{const p=JSON.parse(localStorage.getItem('vextor-pref'));if(p){const r=document.documentElement;r.dataset.mode=p.mode==='auto'?(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'):p.mode;r.style.setProperty('--hue',p.hue);if(p.customAccent)r.style.setProperty('--accent',p.customAccent);r.style.setProperty('--bg-dark',p.bgDark?p.bgDark/100:1);r.style.setProperty('--bg-blur',(p.bgBlur||0)+'px')}}catch(e){}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&family=Manrope:wght@500;700;800&family=Poppins:wght@400;600;800&family=Playfair+Display:ital,wght@0,600;1,600&display=swap" rel="stylesheet">
@@ -13,6 +13,8 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
 </head>
 <body class="loading">
+
+<div id="bg-layer"></div>
 
 <div id="splash" role="status" aria-label="Cargando Vextor">
   <div class="sp-in">
@@ -104,13 +106,26 @@
     <div class="mh"><h2>Configuración</h2><button class="x" data-close="modal-cfg" aria-label="Cerrar"><i class="fa-solid fa-xmark"></i></button></div>
     <h4>Modo</h4>
     <div class="seg"><button data-m="auto">Auto</button><button data-m="light">Claro</button><button data-m="dark">Oscuro</button></div>
+    
+    <!-- MODIFICADO: Controles de color -->
     <h4>Color de acento</h4>
-    <input type="range" id="hue" class="hue" min="0" max="360" aria-label="Tono">
+    <div class="color-ctrl">
+      <input type="range" id="hue" class="hue" min="0" max="360" aria-label="Tono">
+      <input type="color" id="custom-color" aria-label="Color libre" title="Elegir color libre">
+    </div>
+    
     <h4>Wallpaper</h4>
     <div class="walls">
       <button class="w0" data-w="0" aria-label="Sin wallpaper"></button><button class="w1" data-w="1" aria-label="Noche"></button><button class="w2" data-w="2" aria-label="Violeta"></button><button class="w3" data-w="3" aria-label="Esmeralda"></button>
     </div>
     <label class="gbtn wide up"><i class="fa-solid fa-upload"></i> Subir imagen (el tema se adapta)<input type="file" id="wall-in" accept="image/*" hidden></label>
+    
+    <h4>Filtros del Wallpaper</h4>
+    <div class="g2">
+      <label>Oscuridad<input type="range" id="bg-dark" min="10" max="100"></label>
+      <label>Desenfoque<input type="range" id="bg-blur" min="0" max="40"></label>
+    </div>
+
     <h4>Nivel de cristal</h4>
     <input type="range" id="blur" min="5" max="60" aria-label="Desenfoque">
     <div class="g2">

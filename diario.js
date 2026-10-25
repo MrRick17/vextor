@@ -7,7 +7,7 @@ const C={win:'#34d399',loss:'#f87171'};
 const F=['fecha','resultado','activo','tf','dir','setup','ses','plan','emo','notas'];
 const WALLS=[null,'linear-gradient(135deg,#020617,#0f172a)','linear-gradient(135deg,#2e1065,#172554)','linear-gradient(135deg,#022c22,#064e3b)'];
 
-// ⚠️ PON AQUÍ TU API KEY DE GOOGLE AI STUDIO (https://aistudio.google.com/)
+// API KEY DE GEMINI 
 const GEMINI_API_KEY = "AQ.Ab8RN6Ixv1qs-eahtLbH3wyfcv4qaPAFFDPhVv1Rwvt-KAB6oQ"; 
 const SYSTEM=`Eres un mentor de trading experto en SMC/ICT (liquidez BSL/SSL, order blocks, FVG, inducement, MSS). Analiza el trade que te envíen en JSON. Responde en español, en texto plano sin markdown ni asteriscos, máximo 120 palabras, en este orden: 1) Evaluación del setup. 2) Disciplina y emoción (campos plan y emo). 3) Una mejora concreta para el próximo trade. Sé directo y honesto; si faltan datos, dilo. No des asesoría financiera ni prometas resultados.`;
 
@@ -23,7 +23,8 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const sum=a=>a.reduce((x,t)=>x+t.resultado,0);
 const ls=(k,v)=>{try{if(v===undefined)return JSON.parse(localStorage.getItem(k));localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
 const S={trades:[],filter:null,offline:false,m:new Date().getMonth(),y:new Date().getFullYear(),
-  pref:{mode:'auto',hue:250,blur:24,font:"'Inter',sans-serif",cur:'$',italic:false,wall:null,...ls('vextor-pref')}};
+  // MODIFICADO: Agregada propiedad customAccent para el color libre
+  pref:{mode:'auto',hue:250,customAccent:null,blur:24,font:"'Inter',sans-serif",cur:'$',italic:false,wall:null,bgDark:100,bgBlur:0,...ls('vextor-pref')}};
 const fmt=n=>(n<0?'-':n>0?'+':'')+S.pref.cur+Math.abs(n).toFixed(2);
 const cls=n=>n>BE?'win':n<-BE?'loss':n?'be':'';
 
@@ -148,7 +149,7 @@ async function save(){
   local();renderAll();close('modal-trade');toast(id?'Trade actualizado':'Trade guardado');
 }
 
-/* ---------- IA (Sin captchas ni App Check) ---------- */
+/* ---------- IA ---------- */
 async function analizar(){
   const out=$('#ia-out'),btn=$('#ia');out.hidden=false;
   
@@ -163,11 +164,10 @@ async function analizar(){
   btn.disabled=true;out.textContent='Analizando…';
   
   try{
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${GEMINI_API_KEY}`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        // CORRECCIÓN: systemInstruction en camelCase y parts como array
         systemInstruction: { parts: [{ text: SYSTEM }] },
         contents: [{ parts: [{ text: 'Trade a analizar (JSON):\n' + JSON.stringify(t) }] }],
         generationConfig: { temperature: 0.6 }
@@ -175,8 +175,6 @@ async function analizar(){
     });
 
     const data = await response.json();
-    
-    // Si Google devuelve un error de formato o de API key, lo lanzamos
     if (data.error) throw new Error(data.error.message);
     
     const txt = data.candidates[0].content.parts[0].text;
@@ -184,7 +182,6 @@ async function analizar(){
     
   }catch(e){
     console.error("Error detallado:", e);
-    // Ahora verás exactamente qué falló en la pantalla
     out.textContent='Error de API: ' + e.message;
   }finally{btn.disabled=false}
 }
@@ -200,10 +197,26 @@ const savePref=()=>ls('vextor-pref',S.pref);
 function theme(){
   const p=S.pref,r=document.documentElement;
   r.dataset.mode=p.mode==='auto'?(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'):p.mode;
-  r.style.setProperty('--hue',p.hue);r.style.setProperty('--blur',p.blur+'px');r.style.setProperty('--wall',p.wall||'none');r.style.setProperty('--ff',p.font);
+  
+  r.style.setProperty('--hue',p.hue);
+  
+  // MODIFICADO: Aplicación de color libre si existe, si no, se borra para usar el del slider
+  if (p.customAccent) r.style.setProperty('--accent', p.customAccent);
+  else r.style.removeProperty('--accent');
+  
+  r.style.setProperty('--blur',p.blur+'px');r.style.setProperty('--wall',p.wall||'none');r.style.setProperty('--ff',p.font);
+  r.style.setProperty('--bg-dark',p.bgDark/100);r.style.setProperty('--bg-blur',p.bgBlur+'px');
+  
   document.body.classList.toggle('it',p.italic);
   $$('.seg button').forEach(b=>b.classList.toggle('on',b.dataset.m===p.mode));
-  $('#hue').value=p.hue;$('#blur').value=p.blur;$('#cur').value=p.cur;$('#font').value=p.font;$('#ital').checked=p.italic;
+  
+  // Actualización de los valores de los inputs visualmente
+  $('#hue').value=p.hue;
+  if(p.customAccent) $('#custom-color').value = p.customAccent; 
+  
+  $('#blur').value=p.blur;$('#cur').value=p.cur;$('#font').value=p.font;$('#ital').checked=p.italic;
+  $('#bg-dark').value=p.bgDark;$('#bg-blur').value=p.bgBlur; 
+  
   if(ch.eq){charts();kpis()}
 }
 function adaptar(im){ 
@@ -212,7 +225,9 @@ function adaptar(im){
   for(let i=0;i<d.length;i+=4){r+=d[i];g+=d[i+1];b+=d[i+2]}r/=n;g/=n;b/=n;
   const lum=(.2126*r+.7152*g+.0722*b)/255,mx=Math.max(r,g,b),dl=mx-Math.min(r,g,b);let h=S.pref.hue;
   if(dl>12){h=mx===r?((g-b)/dl)%6:mx===g?(b-r)/dl+2:(r-g)/dl+4;h=Math.round((h*60+360)%360)}
-  Object.assign(S.pref,{mode:lum>.5?'light':'dark',hue:h,blur:lum>.35&&lum<.7?32:22});toast('Tema ajustado al wallpaper');
+  // MODIFICADO: Al cambiar de wallpaper, reseteamos el customAccent para usar la paleta de la imagen
+  Object.assign(S.pref,{mode:lum>.5?'light':'dark',hue:h,customAccent:null,blur:lum>.35&&lum<.7?32:22});
+  toast('Tema ajustado al wallpaper');
 }
 
 /* ---------- Eventos ---------- */
@@ -241,16 +256,44 @@ document.addEventListener('pointermove',e=>{const c=e.target.closest?.('.spot');
 $('#save').onclick=save;$('#ia').onclick=analizar;$('#csv').onclick=csv;
 $('#prev').onclick=()=>{if(--S.m<0){S.m=11;S.y--}cal()};
 $('#next').onclick=()=>{if(++S.m>11){S.m=0;S.y++}cal()};
-$('#hue').oninput=e=>{S.pref.hue=+e.target.value;savePref();theme()};
+
+$('#bg-dark').oninput=e=>{S.pref.bgDark=+e.target.value;savePref();theme()};
+$('#bg-blur').oninput=e=>{S.pref.bgBlur=+e.target.value;savePref();theme()};
+
+// MODIFICADO: Lógica cruzada entre slider de tono (hue) y selector de color libre
+$('#hue').oninput=e=>{S.pref.hue=+e.target.value; S.pref.customAccent=null; savePref();theme()};
+$('#custom-color').oninput=e=>{S.pref.customAccent=e.target.value; savePref();theme()};
+
 $('#blur').oninput=e=>{S.pref.blur=+e.target.value;savePref();theme()};
 $('#cur').onchange=e=>{S.pref.cur=e.target.value;savePref();renderAll()};
 $('#font').onchange=e=>{S.pref.font=e.target.value;savePref();theme()};
 $('#ital').onchange=e=>{S.pref.italic=e.target.checked;savePref();theme()};
-$('#wall-in').onchange=e=>{const f=e.target.files[0];if(!f)return;const rd=new FileReader();
-  rd.onload=()=>{const im=new Image();im.onload=()=>{adaptar(im);S.pref.wall=`url(${rd.result})`;savePref();theme()};im.src=rd.result};rd.readAsDataURL(f)};
+
+$('#wall-in').onchange=e=>{
+  const f=e.target.files[0];if(!f)return;
+  const rd=new FileReader();
+  rd.onload=()=>{
+    const im=new Image();
+    im.onload=()=>{
+      adaptar(im);
+      const c=document.createElement('canvas'), ctx=c.getContext('2d');
+      const MAX=1920; let w=im.width, h=im.height;
+      if(w>h && w>MAX){h*=MAX/w; w=MAX;} else if(h>MAX){w*=MAX/h; h=MAX;}
+      c.width=w; c.height=h;
+      ctx.drawImage(im,0,0,w,h);
+      
+      S.pref.wall=`url(${c.toDataURL('image/jpeg',0.6)})`;
+      savePref();
+      theme();
+    };
+    im.src=rd.result;
+  };
+  rd.readAsDataURL(f);
+};
+
 matchMedia('(prefers-color-scheme:dark)').addEventListener('change',()=>S.pref.mode==='auto'&&theme());
 
-/* ---------- Arranque: la pantalla de carga espera a Firebase ---------- */
+/* ---------- Arranque ---------- */
 theme();
 const t0=performance.now();
 await store.load();
