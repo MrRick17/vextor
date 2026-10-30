@@ -11,7 +11,7 @@ const MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','
 // ---------- IA (Gemini) ----------
 const GEMINI_API_KEY = "AQ.Ab8RN6Ixv1qs-eahtLbH3wyfcv4qaPAFFDPhVv1Rwvt-KAB6oQ";
 // gemini-1.5-flash ya no existe en la API. Se prueba en orden; si uno falla por cuota o no existe, pasa al siguiente.
-const MODELS=['gemini-2.5-flash','gemini-2.5-flash-lite'];
+const MODELS=['gemini-3.8-flash','gemini-3.5-flash-lite'];
 const SYSTEM=`Eres un mentor de trading experto en SMC/ICT (liquidez BSL/SSL, order blocks, FVG, inducement, MSS). Analiza el trade que te envíen en JSON. Responde en español, en texto plano sin markdown ni asteriscos, máximo 120 palabras, en este orden: 1) Evaluación del setup. 2) Disciplina y emoción (campos plan y emo). 3) Una mejora concreta para el próximo trade. Sé directo y honesto; si faltan datos, dilo. No des asesoría financiera ni prometas resultados.`;
 
 let db;
